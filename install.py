@@ -13,8 +13,8 @@ class Engine(object):
   self.output = '.out'
   self.devnull = open(os.devnull,'w')
   self.required = []
-  self.software = ['isc-dhcp-server','python-scapy','aircrack-ng',
-                   'lighttpd','hostapd','php7.0-cgi','macchanger','net-tools']
+  self.software = ['isc-dhcp-server','python-scapy','aircrack-ng','net-tools',
+                   'lighttpd','hostapd','php7.0-cgi','macchanger','wireless-tools']
 
  def findRequired(self):
   for software in self.software:
