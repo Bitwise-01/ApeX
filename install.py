@@ -13,14 +13,14 @@ class Engine(object):
   self.output = '.out'
   self.devnull = open(os.devnull,'w')
   self.required = []
-  self.software = ['isc-dhcp-server','python-scapy','aircrack-ng','ifconfig'
-                   'lighttpd','hostapd','php7.0-cgi','macchanger','iwconfig']
+  self.software = ['isc-dhcp-server','python-scapy','aircrack-ng',
+                   'lighttpd','hostapd','php7.0-cgi','macchanger']
 
  def findRequired(self):
   for software in self.software:
-   output = open(self.output,'w')
-   cmd = ['apt-cache','policy',software]
-   subprocess.Popen(cmd,stdout=output,stderr=output).wait()
+   with open(self.output,'w') as output:
+    cmd = ['apt-cache','policy',software]
+    subprocess.Popen(cmd,stdout=output,stderr=output).wait()
    if not self.readOutput():
     self.required.append(software)
 
@@ -64,10 +64,6 @@ if __name__ == '__main__':
   engine.install()
   if not engine.required:
    subprocess.call(['clear'])
-   print 'All requirements found'
- except Exception as e:
-  subprocess.call(['clear'])
-  print 'Exception: {}'.format(e)
+   print 'requirements found'
  finally:
-  if os.path.exists(engine.output):
-   os.remove(engine.output)
+  os.remove(engine.output)
