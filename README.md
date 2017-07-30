@@ -2,7 +2,7 @@
 ApeX. A better way to obtain wifi passwords
 
 # Usage
-python apex.py wlan0
+python apex.py interface
 
 # Requirements
 * isc-dhcp-server
