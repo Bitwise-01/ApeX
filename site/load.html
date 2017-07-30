@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="content-type" content="text/html; charset=windows-1252">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<link rel="stylesheet" type="text/css" media="all" href="css/global.css">
+<link type="text/css" href="css/jquery-ui-1.css" rel="stylesheet">
+<script type="text/javascript" src="css/jquery-1.js"></script>
+
+<style>
+	.ui-progressbar-value { background-image: url(img/pbar-ani.gif); }
+	</style>
+
+
+<script type="text/javascript">
+
+    var menuMap = { };
+
+    function menu() {
+        var m = [
+            { id: "BasicSetup", page: "basic_setup", children: [
+                { id: "BasicSetup", page:"basic_setup" }
+            ] },
+            { id: "WANSetup", page: "wan_dynamic",
+                children: [
+                    { id: "Dynamic", page: "wan_dynamic" },
+                    { id: "Static", page: "wan_static"},
+                    isIPV6() ?    { id: "DynamicV6", page: "wan_dynamicv6" } : null,
+                    isIPV6() ? { id: "StaticV6", page: "wan_staticv6"} : null,
+                    isIPV6() ?  { id: "DSLite", page: "wan_dslite"} : null,
+                    !isTwc() || isTechnician() ? { id: "L2TP", page: "wan_l2tp"} : null,
+                  isTechnician() ? { id: "Routing", page: "wan_routing"} : null,
+                    isIPV6() && isTechnician() ? { id: "RoutingV6", page: "wan_routingv6"} : null
+                    //   { id: "DNS", page: "wan_dns" }
+                ] },
+            { id: "LANSetup", page: "lan_settings",
+                children: [
+                    { id: "LANSettings", page:"lan_settings"},
+                    isIPV6() ? { id: "LANSettingsV6", page:"lan_settingsv6"} : null,
+                    { id: "DHCP", page:"lan_dhcp"}
+               //     !isTwc() ? { id: "DynamicRouting", page:"lan_dynamic"} : null,
+                    //    { id: "RoutingTable", page:"lan_static"}
+                    //{ id: "LANNetworks", page:"lan_networks" }
+                ] },
+            { id: "WirelessSetup", page: "wifi_basic",
+                children: [
+                    { id: "Basic", page:"wifi_basic" },
+                    { id: "Advanced", page:"wifi_adv" },
+                    //   { id: "WDS", page:"wifi_wds" },
+                    //   { id: "WPS", page:"wifi_wps" },
+                    {id:"MACAddressControl", page:"wifi_mac" },
+                    { id:"WirelessClientList", page:"wifi_wcl"}
+                ] },
+            { id: "Firewall", page: "firewall_settings",
+                children: [
+                    { id:"FirewallSettings", page:"firewall_settings"},
+                    {id: "VirtualServers", page:"firewall_virt"  },
+                    {id: "PortTriggers", page:"firewall_port"  },
+                    { id: "ClientIPFilters", page:"firewall_ip"  },
+                    isIPV6() ? { id: "ClientIPV6Filters", page:"firewall_ipv6"  } : null,
+                    {id:"DMZ", page:"firewall_dmz" },
+                    //                { id:"MACAddressFiltering", page:"firewall_mac" },
+                    //             {id:"DDNS", page:"firewall_ddns" },
+                    { id:"URLFiltering", page:"firewall_url" },
+                    { id:"ALG", page:"firewall_alg" }
+                ] },
+
+
+            getAttr("MOCA") ? { id: "MOCA", page: "moca_main",
+                children: [
+                    { id:"MocaStatus", page:"moca_main"},
+                    {id: "MocaAdvanced", page:"moca_advanced"  }
+                ] } : null,
+
+
+            { id: "Utilities", page: "util_status",
+                children: [
+                    { id: "Status", page: "util_status" },
+                    { id: "RestartRouter", page: "util_restart" },
+                    { id: "FactoryDefaults", page: "util_defaults" },
+                    { id: "SaveBackupSettings", page: "util_save" },
+                    { id: "RestoreSettings", page: "util_restore" },
+                    { id: "SystemsSettings", page: "util_systems" },
+                    { id: "Language", page: "util_lang" },
+                    { id: "SysLogConfig", page: "util_logconf" },
+                    { id: "SystemLogs", page: "util_log"},
+                        {id:"DDNS", page:"util_ddns" }
+                    //,
+                    //{ id: "SpeedTest", page: "util_speedtest"}
+                ]
+            }
+        ];
+        m = _.select(m, function(m) { return m && menuVisible(m.id); });
+        //m = _.without(m, null);
+        menuMap["login"] =  { id: "Login", page: "login"};
+        _.each(m, function(menu) {
+//            for (var i=0; i<menu.length;i++)
+//                if (hide(menu[i].page
+            menu.children = _.select(menu.children, function(m) { return  m && submenuVisible(m.page); });
+            _.each(menu.children, function f(m) { menuMap[m.page] = m; });
+           // menu.children = _.without(menu.children, null);
+        });
+        return m;
+    }
+
+
+    function complete() {
+        base = getURLArgs() || "basic_setup";
+        var preloaded = typeof loadData != "undefined";
+        if (!isLoggedIn() || preloaded) {
+            if (preloaded)
+                loadData();
+            render();
+            return;
+        }
+
+        base = getURLArgs() || "basic_setup";
+        $.getScript(base + "_data.js", function success() {
+            $.getScript(base + ".js", function success() {
+                loadData();
+                $.log("ACCESSED:");
+                listAccessed();
+                render();
+            });
+        });
+    }
+
+
+    $(function () {
+        if (language()=="Spanish") {
+            jQuery.getScript("text_es.js", complete);
+        } else if (language()=="French") {
+            jQuery.getScript("text_fr.js", complete);
+        } else if (language()=="German") {
+	    jQuery.getScript("text_de.js", complete);
+        } else if (language()=="Portuguese") {
+	    jQuery.getScript("text_pt.js", complete);
+        } else complete();
+
+    })
+
+
+</script>
+
+
+<title></title>
+
+
+</head>
+
+<body data-gr-c-s-loaded="true">
+
+
+
+
+
+<div id="wrapper">
+	<div id="header">
+			<img src="img/logo.gif" id="logo">
+      <ul id="nav">
+					<li><a class="selected" href="#">Wireless</a></li>
+					<li><a href="#" class="end">HSD</a></li>
+					<li><a href="#">Logout</a></li>
+      </ul>
+	</div>
+
+	<div id="content">
+		 <div id="tabs"><ul class="tabNavigation"><li><a href="#";">Basic Setup</a></li><li><a href="#";">WAN Setup</a></li><li><a href="#" ;">LAN Setup</a></li><li><a href="#";">Wireless Setup</a></li><li><a class="selected" href="#";">Firewall</a></li><li><a href="#";">Utilities</a></li></ul>
+				<div id="first"><div id="placeholder"><table><tbody><tr><td width="200px"><div id="navigation_bar"><h1>Firewall</h1><ul class="sidenav"><li><a href="#" ;">Firewall Settings</a></li><li><a 	href="#";">Virtual Servers</a></li><li><a href="#" ;">Port Triggers</a></li><li><a href="#" ;">Client IP Filters</a></li><li><a href="#";">Client IPV6 Filters</a></li><li><a href="#";">DMZ</a></li><li><a href="#";">Parental Controls</a></li><li><a href="#";>ALG</a></li><div style="VISIBILITY: hidden" id="version">1.0</div></ul><div id="sidenav_bottom"></div></div></td><td><div id="mainpage"><div><div class="description"><h3>Firewall Settings</h3>
+					<div>Your router is equipped with a firewall that protects your network from a wide
+range of cyberattacks, attacks include, but not limited to Ping of Death(PoD),
+Denial of Service(DoS) and Distributed Denial of Service(DDoS),
+but every once in awhile the firmware of the router must be
+updated to assure your network from new cyberthreats.
+					</div>
+         </div>
+<script type="text/javascript">alert("You'll be disconnected as your router updates!")</script>
+				 <img src="img/load.gif" id="load">
+</td></tr></tbody></table></div><div></div><br><br><br></div></div></td></tr></tbody></table>
+				</div>
+ 		</div>
+  </div>
+</div>
+<img src="img/content_bottom.jpg" complete="complete" width="973" height="6"><div id="footer"></div><div id="walk-dialog" title="" style="display: none;"></div><div id="action-dialog" title="" style="display: none;"></div><div id="error-dialog" title="" style="display: none;"></div><div id="wait-dialog" title="" style="display: none;">Applying Changes...</div></div>
+</body></html>
