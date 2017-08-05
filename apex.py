@@ -47,7 +47,7 @@ class Aircrack(Deauth,Eviltwin,DnsServer,SiteHandler,NetworkManager,InterfaceMan
   self.monitorNetwork = False
 
  def _killProc(self):
-  cmd = "for task in `lsof -i  | grep -v 'COMMAND' | grep -v 'firefox-e' | awk '{print $2}'`; do kill -9 $task;done"
+  cmd = "for task in `lsof -i  | grep -v 'COMMAND' | grep -v 'firefox-e' | awk '{print $2}'`; do kill -15 $task;done"
   subprocess.Popen(cmd,stdout=devnull,stderr=devnull,shell=True).wait()
 
  def killProc(self):
