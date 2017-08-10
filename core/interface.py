@@ -3,34 +3,34 @@
 # Author: Ethical-H4CK3R
 # Description: Interface handler
 
-import os
-import subprocess
+from os import devnull
+from subprocess import Popen
 from core.mac import Generator as macGen
 
 class Interface(object):
- def __init__(self,iface,bssid=None):
+ def __init__(self,iface):
   self.iface = iface
-  self.devnull  = open(os.devnull,'w')
-  self.macAddress = macGen().generate() if not bssid else bssid
+  self.devnull  = open(devnull,'w')
+  self.mac = macGen().generate()
 
  def managedMode(self):
-  subprocess.Popen('ifconfig {} down'.format(self.iface),stdout=self.devnull,stderr=self.devnull,shell=True).wait()
-  subprocess.Popen('iwconfig {} mode managed'.format(self.iface),stdout=self.devnull,stderr=self.devnull,shell=True).wait()
-  subprocess.Popen('macchanger -p {}'.format(self.iface),stdout=self.devnull,stderr=self.devnull,shell=True).wait()
-  subprocess.Popen('ifconfig {} up'.format(self.iface),stdout=self.devnull,stderr=self.devnull,shell=True).wait()
-  subprocess.Popen('service network-manager restart',stdout=self.devnull,stderr=self.devnull,shell=True).wait()
-  
- def monitorMode(self,iface=None):
-  iface = iface if iface else self.iface
-  subprocess.Popen('ifconfig {} down'.format(iface),stdout=self.devnull,stderr=self.devnull,shell=True).wait()
-  subprocess.Popen('iwconfig {} mode monitor'.format(iface),stdout=self.devnull,stderr=self.devnull,shell=True).wait()
-  subprocess.Popen('macchanger -m {} {}'.format(self.macAddress,iface),stdout=self.devnull,stderr=self.devnull,shell=True).wait()
-  subprocess.Popen('ifconfig {} up'.format(iface),stdout=self.devnull,stderr=self.devnull,shell=True).wait()
-  subprocess.Popen('service network-manager stop',stdout=self.devnull,stderr=self.devnull,shell=True).wait()
+  [self.destroyInterface(mon) for mon in ['mon0','mon1']]
+  cmd = 'service network-manager restart'
+  Popen(cmd,stdout=self.devnull,stderr=self.devnull,shell=True).wait()
 
- def createInterface(self):
-  subprocess.Popen('iw {} interface add mon0 type monitor'.format(self.iface),stdout=self.devnull,stderr=self.devnull,shell=True).wait()
-  self.monitorMode('mon0')
+ def changeMac(self,iface):
+  cmd ='ifconfig {0} down && iwconfig {0} mode monitor &&\
+        macchanger -m {1} {0} && service\
+        network-manager stop && ifconfig {0} up'.format(iface,self.mac)
 
- def destroyInterface(self):
-  subprocess.Popen('iw dev mon0 del',stdout=self.devnull,stderr=self.devnull,shell=True).wait()
+  Popen(cmd,stdout=self.devnull,stderr=self.devnull,shell=True).wait()
+
+ def monitorMode(self,iface):
+  self.destroyInterface(iface)
+  Popen('iw {} interface add {} type monitor'.format(self.wlan,iface),
+  stdout=self.devnull,stderr=self.devnull,shell=True).wait()
+  self.changeMac(iface)
+
+ def destroyInterface(self,iface):
+  Popen('iw dev {} del'.format(iface),stdout=self.devnull,
+  stderr=self.devnull,shell=True).wait()

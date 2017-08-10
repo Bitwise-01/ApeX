@@ -3,9 +3,8 @@
 # Author: Ethical-H4CK3R
 # Description: Accesspoint handler
 
-import csv
-import time
-import subprocess
+from csv import reader
+from subprocess import Popen, call
 
 class Accesspoints(object):
  def __init__(self,essid=None):
@@ -20,7 +19,7 @@ class Accesspoints(object):
 
  def open(self,csvfile):
   with open(csvfile,'r') as csvfile:
-   self.csv = csv.reader(csvfile,delimiter = ',')
+   self.csv = reader(csvfile,delimiter = ',')
    self.organize()
    self.setMap()
    self.display()
@@ -128,14 +127,14 @@ class Accesspoints(object):
 
  def display(self):
   if self.lst:
-   subprocess.call(['clear'])
+   call(['clear'])
    for line in self.map:
     print line
 
  def supported(self,bssid):
   out = open('.mac','w')
   mac = bssid[:8].lower()
-  subprocess.Popen('macchanger -l | grep {} | grep -i arris'.format(mac),stdout=out,stderr=out,shell=True).wait()
+  Popen('macchanger -l | grep {} | grep -i arris'.format(mac),stdout=out,stderr=out,shell=True).wait()
   with open('.mac','r') as f:
    n = [n for n in f]
    return '{}{}{}'.format(self.green,bssid,self.reset) if n else '{}{}{}'.format(self.red,bssid,self.reset)
