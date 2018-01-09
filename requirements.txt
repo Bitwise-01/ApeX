@@ -1,0 +1,5 @@
+hostapd
+dnsmasq
+lighttpd
+php7.0-cgi
+python-scapy

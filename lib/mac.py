@@ -1,8 +1,3 @@
-# Date: 07/15/2017
-# Distro: Kali linux
-# Author: Ethical-H4CK3R
-# Description: Generates a random mac address
-
 import random
 
 class Generator(object):

