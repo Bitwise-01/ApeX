@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# Author: Ethical-H4CK3R
-# Date: 01/08/2018
+
 # Version: 1.1
+# Date: 01/08/2018
+# Author: Ethical-H4CK3R
 
 from sys import exit
 from time import sleep
