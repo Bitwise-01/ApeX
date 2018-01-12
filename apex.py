@@ -23,7 +23,7 @@ import shutil
 import lib.settings as settings
 
 class Apex(object):
- ''' Using Social Engineer To Hack Wifi '''
+ ''' Using Social Engineering To Hack Wifi '''
 
  def __init__(self, iface, ap, handshake):
 
