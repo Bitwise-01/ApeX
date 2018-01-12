@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # Author: Ethical-H4CK3R
 # Date: 01/08/2018
-# Version = 1.1
+# Version: 1.1
 
 from sys import exit
 from time import sleep
